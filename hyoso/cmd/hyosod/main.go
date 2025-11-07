@@ -1,32 +1,24 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/fuzeteaaddict/hyoso/internal/config"
 	"github.com/fuzeteaaddict/hyoso/internal/sshd"
-	"github.com/fuzeteaaddict/hyoso/internal/util"
 )
 
 func main() {
-	conf, err := config.LoadConfig()
+	cfgPath := filepath.Join(os.Getenv("HOME"), ".hyoso", "config.toml")
+
+	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	hostKey := util.ExpandHome(conf.Core.MasterKey)
-	addr := fmt.Sprintf(":%d", conf.Core.ListenPort)
-
-	log.Printf("[+] hyoso starting on %s ...", addr)
-	log.Printf("[+] using host key: %s", hostKey)
-
-	srv := sshd.Server{
-		Addr:    addr,
-		KeyPath: hostKey,
-	}
-
-	if err := srv.Start(); err != nil {
-		log.Fatalf("server error: %v", err)
+	server := &sshd.Server{Config: cfg}
+	if err := server.Start(); err != nil {
+		log.Fatal(err)
 	}
 }

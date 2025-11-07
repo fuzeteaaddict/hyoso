@@ -8,41 +8,51 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-type Core struct {
-	MasterKey  string `toml:"master_key"`
-	ListenPort int    `toml:"listen_port"`
-	LogDir     string `toml:"log_dir"`
-}
-
-type Target struct {
-	Name     string   `toml:"name"`
-	Host     string   `toml:"host"`
-	User     string   `toml:"user"`
-	Port     int      `toml:"port"`
-	KeyPath  string   `toml:"key_path"`
-	Record   string   `toml:"record"`
-	Tags     []string `toml:"tags"`
+type CoreConfig struct {
+	MasterKey    string `toml:"master_key"`
+	ListenPort   int    `toml:"listen_port"`
+	LogDir       string `toml:"log_dir"`
+	AuthMethod   string `toml:"auth_method"`
+	PasswordType string `toml:"password_type"`
+	PasswordFile string `toml:"password_file"`
+	AuthKeyFile  string `toml:"authkey_file"`
+	AuthCommand  string `toml:"auth_command"`
 }
 
 type Config struct {
-	Core    Core      `toml:"core"`
-	Targets []Target  `toml:"target"`
+	Core CoreConfig `toml:"core"`
 }
 
-func LoadConfig() (*Config, error) {
-	path := filepath.Join(os.Getenv("HOME"), ".hyoso", "config.toml")
-	_, err := os.Stat(path)
-	if err != nil {
-		return nil, fmt.Errorf("config not found: %w", err)
+func Load(path string) (*Config, error) {
+	var cfg Config
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("config file not found: %s", path)
 	}
 
-	var conf Config
-	if _, err := toml.DecodeFile(path, &conf); err != nil {
-		return nil, fmt.Errorf("parse config: %w", err)
+	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
-	if conf.Core.ListenPort == 0 {
-		conf.Core.ListenPort = 2222
+	expand := func(p string) string {
+		if p == "" {
+			return ""
+		}
+		if p[0] == '~' {
+			home, _ := os.UserHomeDir()
+			p = filepath.Join(home, p[1:])
+		}
+		return os.ExpandEnv(p)
 	}
-	return &conf, nil
+
+	cfg.Core.MasterKey = expand(cfg.Core.MasterKey)
+	cfg.Core.LogDir = expand(cfg.Core.LogDir)
+	cfg.Core.PasswordFile = expand(cfg.Core.PasswordFile)
+	cfg.Core.AuthKeyFile = expand(cfg.Core.AuthKeyFile)
+
+	if cfg.Core.ListenPort == 0 {
+		cfg.Core.ListenPort = 2222
+	}
+	// log.Printf("loaded config: %+v", cfg.Core)
+	return &cfg, nil
 }
